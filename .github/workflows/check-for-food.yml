@@ -1,9 +1,8 @@
-name: Check for food
+name: Check for new lunch menu
 on:
   schedule:
-    - cron: '0 8,10 * * 1,2,3,4,5'
+    - cron: '0 10 * * 1,2,3,4,5'
   push:
-    branches: [ master ]
 
 jobs:
   install-dependencies:
@@ -54,8 +53,9 @@ jobs:
         run: yarn build
       - name: Run
         run: yarn start
-      - name: Save records
+      - name: Save screenshots
+        if: ${{ failure() }}
         uses: actions/upload-artifact@v3
         with:
-          name: records
-          path: records/
+          name: screenshots
+          path: screenshots/

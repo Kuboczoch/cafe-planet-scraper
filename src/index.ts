@@ -1,4 +1,3 @@
-import puppeteer from 'puppeteer'
 import format from 'date-fns/format'
 
 require('dotenv').config({ path: '.env' })
@@ -7,77 +6,81 @@ import clickCookies from './utils/facebook/clickCookies'
 import getLatestPost from './utils/facebook/getLatestPost'
 import menuMapper from './utils/mappers/menuMapper'
 import auth from './utils/googleapi/auth'
-import type { WEEK_DAYS } from './types/lunch'
+import type { TLunchMenu, WEEK_DAYS } from './types/lunch'
 import lunchToCalendarEventMapper from './utils/mappers/lunchToCalendarEventMapper'
 import delay from './utils/delay'
 import getCalendarLunches from './utils/googleapi/getCalendarLunches'
-
-const _initBrowser = async (): Promise<[puppeteer.Browser, puppeteer.Page]> => {
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ['--no-sandbox'],
-  })
-  const page = await browser.newPage()
-  await page.setViewport({
-    width: 1200,
-    height: 800,
-  })
-  return [browser, page]
-}
+import initBrowser from './utils/puppeteer/initBrowser'
+import handleError from './utils/handleError'
 
 const main = async () => {
-  if (!process.env.FACEBOOK_PAGE_URL) {
-    throw new Error(`Not configured 'FACEBOOK_PAGE_URL' env`)
-  }
   const googleAuth = auth()
   const { data } = await getCalendarLunches(googleAuth)
 
-  if (data.items?.length === 5) {
-    console.log('All week set! No need for more scraping!')
-    return 1
-  }
+  // Check if there is a need for scraping
+  // if (data.items?.length === 5) {
+  //   console.log('All week set! No need for more scraping!')
+  //   return 0
+  // }
 
   // --- scraping magic
 
-  const [browser, page] = await _initBrowser()
+  const [browser, page] = await initBrowser()
 
-  await page.goto(process.env.FACEBOOK_PAGE_URL, {
-    waitUntil: 'networkidle2',
-  })
+  let postText: string | undefined
 
-  await clickCookies(page)
-  const element = await getLatestPost(page)
-  // Get element's textContent, it will parse literally everything into one string.
-  // Emoticons are ignored
-  const value: string | undefined = await page.evaluate(
-    (el) => el.textContent,
-    element,
-  )
-  if (!value) {
-    throw new Error('No text found in the latest article')
+  try {
+    await clickCookies(page)
+    const element = await getLatestPost(page)
+    // Get element's textContent, it will parse literally everything into one string.
+    // Emoticons are ignored
+    postText = await page.evaluate((el) => el.textContent, element)
+  } catch (e: any) {
+    return await handleError(browser, page, e)
   }
 
-  await browser.close()
+  if (!postText) {
+    return await handleError(
+      browser,
+      page,
+      'No text found in the latest article',
+    )
+  }
 
   // ---
 
   // Log it in case of later debugging
   console.log('---')
   console.log('Found this post content:')
-  console.log(value)
+  console.log(postText)
   console.log('---')
 
-  let mappedMenu
+  let mappedMenu: TLunchMenu
 
   try {
-    mappedMenu = menuMapper(value)
+    mappedMenu = menuMapper(postText)
   } catch (e) {
     if (typeof data.items?.length === 'number' && data.items?.length > 0) {
-      console.warn(`This post probably didn't contained a lunch menu :c`)
-      return
+      return await handleError(
+        browser,
+        page,
+        `This post probably didn't contained a lunch menu :c`,
+      )
     } else {
-      throw new Error(`Whoosh! They forgot or the scraping didn't work`)
+      return await handleError(
+        browser,
+        page,
+        `Whoosh! They forgot or the scraping didn't work`,
+      )
     }
+  }
+
+  if (Object.values(mappedMenu).every((a) => a === null)) {
+    return await handleError(
+      browser,
+      page,
+      `This post probably didn't contained a lunch menu :c`,
+    )
   }
 
   const googleClient = await googleAuth.auth.getClient()
@@ -119,7 +122,9 @@ const main = async () => {
     console.log('All good!')
   }
   console.log('Bon Appétit!')
-  return 1
+
+  await browser.close()
+  return 0
 }
 
 main()

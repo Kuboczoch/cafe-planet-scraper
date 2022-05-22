@@ -1,25 +1,21 @@
 import type puppeteer from 'puppeteer'
 
-const getLatestPost = async (page: puppeteer.Page) => {
-  try {
-    await page.evaluate(`(async() => {
+const codeToClickFirstSeeMoreButton = `(async() => {
     [...document.querySelectorAll(
       'div[role="article"] div[role="button"]',
-    )].find((element) => element.textContent === 'See more').click()
-  })()`)
+    )].find((element) => element.textContent === 'See more')?.click()
+  })()`
 
-    const element = await page.$(
-      'div[role="article"] div[data-ad-comet-preview]',
-    )
+const getLatestPost = async (page: puppeteer.Page) => {
+  await page.evaluate(codeToClickFirstSeeMoreButton)
 
-    if (!element) {
-      throw new Error()
-    }
+  const element = await page.$('div[role="article"] div[data-ad-comet-preview]')
 
-    return element
-  } catch (e) {
+  if (!element) {
     throw new Error('Cannot find latest article')
   }
+
+  return element
 }
 
 export default getLatestPost

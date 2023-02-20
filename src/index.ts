@@ -11,6 +11,7 @@ import type { WEEK_DAYS } from './types/lunch'
 import lunchToCalendarEventMapper from './utils/mappers/lunchToCalendarEventMapper'
 import delay from './utils/delay'
 import getCalendarLunches from './utils/googleapi/getCalendarLunches'
+import filterEventsByCalendarSummary from './utils/googleapi/filterEventsByCalendarSummary'
 
 const _initBrowser = async (): Promise<[puppeteer.Browser, puppeteer.Page]> => {
   const browser = await puppeteer.launch({
@@ -32,7 +33,7 @@ const main = async () => {
   const googleAuth = auth()
   const { data } = await getCalendarLunches(googleAuth)
 
-  if (data.items?.length === 5) {
+  if (filterEventsByCalendarSummary(data.items).length === 5) {
     console.log('All week set! No need for more scraping!')
     return 1
   }

@@ -4,6 +4,7 @@ on:
     - cron: '0 8,10 * * 1,2,3,4,5'
   push:
     branches: [ master ]
+  workflow_dispatch:
 
 jobs:
   install-dependencies:
